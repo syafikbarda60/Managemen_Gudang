@@ -129,6 +129,7 @@ export default function Dashboard({ database: db }) {
   }, [userId]);
 
   const { products, withdrawals, counts = [], receipts = [] } = data;
+  const stock = view === 'stock';
   const incomingView = view === 'receipts';
   const productsById = new Map(products.map(product => [product.id, product]));
   const chartProducts = products.filter(item => !chartCategory || item.category === chartCategory);
@@ -283,7 +284,6 @@ export default function Dashboard({ database: db }) {
   </main>;
 
   const overview = view === 'overview';
-  const stock = view === 'stock';
   const heading = overview ? 'Ringkasan Gudang' : stock ? 'Stok Gudang' : incomingView ? 'Barang Masuk' : 'Pengambilan Barang';
   const action = stock ? () => open('product') : incomingView ? () => open('receive') : () => open('take');
 
