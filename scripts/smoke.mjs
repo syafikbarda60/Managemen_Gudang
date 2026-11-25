@@ -35,11 +35,10 @@ try {
   await request('warehouse', undefined, 401);
   const registered = await request('auth/sign-up/email', { email, password, name: 'Uji Ruang Stok' }, 200);
   assert.equal(registered.user.email, email);
-  await request('warehouse', undefined, 403);
+  await request('warehouse', undefined, 200);
   await request('auth/sign-out', {}, 200);
-  await pool.query('INSERT INTO warehouse_members (user_id) VALUES ($1)', [registered.user.id]);
   await request('auth/sign-in/email', { email, password }, 200);
-  console.log('Akun: registrasi, pembatasan akses, persetujuan, dan login lulus.');
+  console.log('Akun: registrasi dengan akses langsung dan login lulus.');
   const product = { name: marker, unit: 'kg', category: marker, minimum: 5, photo: null };
   await request('warehouse', { type: 'product', row: product }, 403, 'https://example.org');
   await request('warehouse', { type: 'product', row: product }, 201);

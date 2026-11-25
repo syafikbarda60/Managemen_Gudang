@@ -11,8 +11,6 @@ async function access(request, run) {
     const { auth, pool } = getServices();
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return respond({ message: 'Masuk dahulu.' }, 401);
-    const member = await pool.query('SELECT 1 FROM warehouse_members WHERE user_id = $1', [session.user.id]);
-    if (!member.rowCount) return respond({ message: 'Akun memerlukan persetujuan admin gudang.' }, 403);
     return await run(pool);
   } catch (error) {
     if (['22007', '22008', '23503', '23514'].includes(error.code)) return respond({ message: 'Periksa kembali data yang dimasukkan.' }, 400);

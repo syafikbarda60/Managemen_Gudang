@@ -11,15 +11,7 @@ Dashboard Next.js untuk penerimaan, pengambilan, dan penghitungan stok fisik. An
 
 ## Akun petugas
 
-Daftar melalui halaman login. Administrator gudang harus mengonfirmasi identitas petugas dan mencocokkan ID akun yang tampil setelah registrasi. Di Neon SQL Editor, jalankan perintah berikut dengan ID tersebut, kemudian pilih **Cek akses** di aplikasi.
-
-```sql
-insert into warehouse_members (user_id)
-select id from "user" where id = 'ID_AKUN_PETUGAS'
-on conflict do nothing;
-```
-
-Login memakai Better Auth dengan sesi dan akun di PostgreSQL. Alur verifikasi identitas menggunakan persetujuan admin gudang.
+Daftar melalui halaman login. Akun baru langsung bisa melihat dan mencatat data di gudang bersama. Login memakai Better Auth dengan sesi dan akun di PostgreSQL.
 
 ## Vercel
 

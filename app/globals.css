@@ -76,10 +76,10 @@ nav{display:grid;gap:7px;margin-top:45px}.nav-label{font-size:.72rem;font-weight
 .login-card{padding:clamp(20px,5vw,30px)}
 .login-card h1{margin:21px 0 16px}
 .session-loading{margin-top:16px}
+.table-pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding-top:14px;color:var(--muted);font-size:.875rem}
+.table-pagination>div{display:flex;gap:8px}
 .login-card .form-actions{margin-top:16px}
 .auth-help,.demo-access p{font-size:.875rem;line-height:1.45}
-.account-id{display:grid;gap:4px;margin-top:12px;font-size:.85rem}
-.account-id code{user-select:all;overflow-wrap:anywhere}
 .demo-access{display:grid;gap:10px;border-top:1px solid var(--line);margin-top:5px;padding-top:12px}
 @media(max-width:650px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.primary,.secondary,.metric{transition:none}}

@@ -1,9 +1,5 @@
 begin;
 
-create table if not exists public.warehouse_members (
-  user_id text primary key references public."user"(id) on delete cascade
-);
-
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(trim(name)) between 1 and 120),

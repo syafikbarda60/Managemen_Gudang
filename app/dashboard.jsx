@@ -26,6 +26,7 @@ const shift = (day, offset) => {
   return date.toISOString().slice(0, 10);
 };
 const categories = ['Makanan pokok', 'Susu enteral', 'Kemasan', 'Bumbu'];
+const pageSize = 10;
 const demoProducts = [
   { id: 'beras', name: 'Beras Putih', category: categories[0], unit: 'kg', stock: 125, minimum: 30, photo: '/produk/beras.webp' },
   { id: 'susu', name: 'Susu Enteral Vanila', category: categories[1], unit: 'kaleng', stock: 8, minimum: 10, photo: '/produk/susu.webp' },
@@ -71,7 +72,7 @@ function Photo({ product }) {
 export default function Dashboard({ database: db }) {
   const [day, setDay] = useState('');
   const [session, setSession] = useState(null);
-  const [access, setAccess] = useState(null);
+  const [loadedUserId, setLoadedUserId] = useState(null);
   const [demo, setDemo] = useState(false);
   const [register, setRegister] = useState(false);
   const [ready, setReady] = useState(false);
@@ -83,6 +84,7 @@ export default function Dashboard({ database: db }) {
   const [chartMode, setChartMode] = useState('usage');
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [tablePage, setTablePage] = useState(1);
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -115,19 +117,16 @@ export default function Dashboard({ database: db }) {
   }, [db]);
 
   const userId = session?.user.id;
-  const approved = Boolean(userId && access?.id === userId && access.approved);
-  const restoringSession = db && (!ready || (userId && access?.id !== userId));
-  async function checkAccess() {
-    try {
-      await refresh();
-      setAccess({ id: userId, approved: true });
-    } catch (failure) {
-      setAccess({ id: userId, approved: false });
-      if (failure.status !== 403) throw failure;
-    }
-  }
-
-  useEffect(() => { if (userId) checkAccess().catch(failure => setError(failure.message)); }, [userId]);
+  const restoringSession = db && (!ready || (userId && loadedUserId !== userId));
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    api('warehouse')
+      .then(result => { if (active) setData(result); })
+      .catch(failure => { if (active) setError(failure.message); })
+      .finally(() => { if (active) setLoadedUserId(userId); });
+    return () => { active = false; };
+  }, [userId]);
 
   const { products, withdrawals, counts = [], receipts = [] } = data;
   const incomingView = view === 'receipts';
@@ -150,11 +149,17 @@ export default function Dashboard({ database: db }) {
   const filtered = products.filter(matches);
   const history = (incomingView ? receipts : withdrawals).filter(item => matches(productsById.get(item.product_id)))
     .sort((a, b) => (b.taken_date + b.taken_time).localeCompare(a.taken_date + a.taken_time));
+  const totalRows = stock ? filtered.length : history.length;
+  const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(tablePage, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageEnd = Math.min(pageStart + pageSize, totalRows);
 
   function navigate(nextView) {
     setView(nextView);
     setFilter('');
     setSearch('');
+    setTablePage(1);
   }
 
   function open(type, item) {
@@ -178,7 +183,7 @@ export default function Dashboard({ database: db }) {
       if (result?.user) setSession({ user: result.user });
       if (register) {
         setRegister(false);
-        setNotice('Akun berhasil dibuat. Minta admin gudang mengaktifkan aksesmu.');
+        setNotice('Akun berhasil dibuat.');
       }
     } catch (failure) {
       setError(failure.message);
@@ -194,7 +199,7 @@ export default function Dashboard({ database: db }) {
       try { await api('auth/sign-out', {}); }
       catch (failure) { setError(failure.message); return; }
       setSession(null);
-      setAccess(null);
+      setLoadedUserId(null);
       setData({ products: [], withdrawals: [] });
     }
     setDemo(false);
@@ -259,34 +264,21 @@ export default function Dashboard({ database: db }) {
     </Card>
   </main>;
 
-  if (db ? !approved : !demo) return <main className="login">
+  if (db ? !userId : !demo) return <main className="login">
     <Card className="panel login-card gap-0">
       <div className="brand"><div className="brand-icon"><Warehouse size={23} /></div><div><strong>Ruang Stok</strong><small>Inventaris gudang</small></div></div>
-      <h1>{session ? 'Akses gudang' : register ? 'Daftar akun' : 'Masuk ke Ruang Stok'}</h1>
+      <h1>{register ? 'Daftar akun' : 'Masuk ke Ruang Stok'}</h1>
       {notice && <p className="notice" role="status">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      {session ? <>
-        <p>Akun {session.user.email} memerlukan persetujuan admin gudang.</p>
-        <p className="account-id">ID akun <code>{session.user.id}</code></p>
-        <div className="form-actions">
-          <button className="secondary" onClick={signOut}>Keluar</button>
-          <button className="primary" onClick={async () => {
-            setBusy(true);
-            setError('');
-            try { await checkAccess(); } catch (failure) { setError(failure.message); } finally { setBusy(false); }
-          }} disabled={busy}>Cek akses</button>
-        </div>
-      </> : <>
-        <form key={String(register)} onSubmit={authenticate}>
-          {register && <label>Nama lengkap <Input required name="name" maxLength={100} autoComplete="name" /></label>}
-          <label>Email <Input required type="email" name="email" autoComplete="username" /></label>
-          <label>Kata sandi <Input required type="password" name="password" minLength={register ? 8 : undefined} autoComplete={register ? 'new-password' : 'current-password'} /></label>
-          {register && <p className="auth-help">Gunakan minimal 8 karakter. Akses gudang aktif setelah disetujui admin.</p>}
-          <Button size="lg" className="primary" disabled={busy || !ready || !db}>{busy ? 'Memproses…' : register ? 'Daftar' : 'Masuk'}</Button>
-        </form>
-        <button className="text-button" disabled={busy} onClick={() => { setRegister(!register); setError(''); setNotice(''); }}>{register ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar'}</button>
-        {!db && <div className="demo-access"><p>Neon belum terhubung. Coba fitur gudang dengan data demo di browser ini.</p><button className="secondary" disabled={!ready} onClick={() => setDemo(true)}>Buka dashboard demo</button></div>}
-      </>}
+      <form key={String(register)} onSubmit={authenticate}>
+        {register && <label>Nama lengkap <Input required name="name" maxLength={100} autoComplete="name" /></label>}
+        <label>Email <Input required type="email" name="email" autoComplete="username" /></label>
+        <label>Kata sandi <Input required type="password" name="password" minLength={register ? 8 : undefined} autoComplete={register ? 'new-password' : 'current-password'} /></label>
+        {register && <p className="auth-help">Gunakan minimal 8 karakter.</p>}
+        <Button size="lg" className="primary" disabled={busy || !db}>{busy ? 'Memproses…' : register ? 'Daftar' : 'Masuk'}</Button>
+      </form>
+      <button className="text-button" disabled={busy} onClick={() => { setRegister(!register); setError(''); setNotice(''); }}>{register ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar'}</button>
+      {!db && <div className="demo-access"><p>Neon belum terhubung. Coba fitur gudang dengan data demo di browser ini.</p><button className="secondary" disabled={!ready} onClick={() => setDemo(true)}>Buka dashboard demo</button></div>}
     </Card>
   </main>;
 
@@ -379,22 +371,29 @@ export default function Dashboard({ database: db }) {
           <div className="panel-head"><div><h2>{stock ? 'Katalog & Stok Barang' : overview ? 'Pengambilan Terbaru' : incomingView ? 'Riwayat Barang Masuk' : 'Riwayat Pengambilan'}</h2><p>{stock ? 'Stok ditampilkan berdasarkan hitungan manual terakhir.' : 'Waktu transaksi ditampilkan dalam WIB.'}</p></div>
             {overview && <button className="secondary" onClick={() => navigate('withdrawals')}>Lihat riwayat</button>}
           </div>
-          {!overview && <div className="filters"><label className="search"><Search size={17} /><Input aria-label="Cari nama barang" placeholder="Cari nama barang…" value={search} onChange={event => setSearch(event.target.value)} /></label>
-            <div className="select-wrap"><select aria-label="Filter jenis produk" value={filter} onChange={event => setFilter(event.target.value)}><option value="">Semua jenis</option>{distinctCategories.map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={15} /></div>
+          {!overview && <div className="filters"><label className="search"><Search size={17} /><Input aria-label="Cari nama barang" placeholder="Cari nama barang…" value={search} onChange={event => { setSearch(event.target.value); setTablePage(1); }} /></label>
+            <div className="select-wrap"><select aria-label="Filter jenis produk" value={filter} onChange={event => { setFilter(event.target.value); setTablePage(1); }}><option value="">Semua jenis</option>{distinctCategories.map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={15} /></div>
           </div>}
           <div className="table-scroll"><table>
             <thead><tr><th>Barang</th><th>Jenis produk</th>{stock ? <><th>Stok fisik</th><th>Status</th><th>Terakhir dihitung</th><th>Aksi</th></> : <><th>Penginput</th><th>Tanggal & jam</th><th>Jumlah</th><th>Catatan</th></>}</tr></thead>
-            <tbody>{stock ? filtered.map(item => <tr key={item.id}>
+            <tbody>{stock ? filtered.slice(pageStart, pageEnd).map(item => <tr key={item.id}>
               <td><div className="product"><Photo product={item} /><strong>{item.name}</strong></div></td><td>{item.category}</td><td>{item.stock === null ? '—' : number.format(item.stock) + ' ' + item.unit}</td>
               <td><span className={'status ' + (critical.includes(item) ? 'low' : item.stock === null ? 'unknown' : '')}>{stockStatus(item)}</span></td>
               <td>{item.counted_at ? new Date(item.counted_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : '—'}</td>
               <td><button className="secondary compact" onClick={() => open('count', item)}>Isi stok</button></td>
-            </tr>) : (overview ? history.slice(0, 5) : history).map(item => {
+            </tr>) : (overview ? history.slice(0, 5) : history.slice(pageStart, pageEnd)).map(item => {
               const entry = productsById.get(item.product_id);
               return <tr key={item.id}><td><div className="product"><Photo product={entry} /><strong>{entry.name}</strong></div></td><td>{entry.category}</td><td>{item.operator}</td><td>{dateLabel.format(new Date(item.taken_date))} {item.taken_date.slice(0, 4)} · {item.taken_time.slice(0, 5)}</td><td><strong>{number.format(item.quantity)} {entry.unit}</strong></td><td>{item.note || '—'}</td></tr>;
             })}</tbody>
           </table></div>
-          {(stock ? !filtered.length : !history.length) && <p className="empty">{stock ? 'Belum ada barang yang sesuai.' : incomingView ? 'Belum ada catatan barang masuk.' : 'Belum ada catatan pengambilan.'}</p>}
+          {!totalRows && <p className="empty">{stock ? 'Belum ada barang yang sesuai.' : incomingView ? 'Belum ada catatan barang masuk.' : 'Belum ada catatan pengambilan.'}</p>}
+          {!overview && totalRows > 0 && <div className="table-pagination" role="group" aria-label="Halaman tabel">
+            <span role="status">{number.format(pageStart + 1)}–{number.format(pageEnd)} dari {number.format(totalRows)}</span>
+            {pageCount > 1 && <div>
+              <Button variant="secondary" className="secondary compact" disabled={currentPage === 1} onClick={() => setTablePage(currentPage - 1)}>Sebelumnya</Button>
+              <Button variant="secondary" className="secondary compact" disabled={currentPage === pageCount} onClick={() => setTablePage(currentPage + 1)}>Berikutnya</Button>
+            </div>}
+          </div>}
         </Card>
       </div>
     </main>
